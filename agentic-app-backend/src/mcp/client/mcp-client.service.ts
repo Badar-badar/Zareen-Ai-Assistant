@@ -1,16 +1,17 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { createMcpServer } from "../server/mcpServer.js";
 
 class MCPClientService {
     private static instance: MCPClientService | null = null;
     public client: Client;
     private tools: any[] = [];
-    private initialized: boolean = false;
+    private initPromise: Promise<MCPClientService> | null = null;
 
     private constructor() {
         this.client = new Client({
-            name: 'node-mcp-client',
-            version: '1.0.0'
+            name: "node-mcp-client",
+            version: "1.0.0"
         });
     }
 
@@ -21,20 +22,19 @@ class MCPClientService {
         return MCPClientService.instance;
     }
 
-    async init() {
-        if (this.initialized) return this;
-
-        const port = process.env.PORT || process.env.MCP_PORT || 4200;
-        const host = (process.env.SERVER || 'http://localhost').replace(/:[0-9]+$/, '').replace(/\/$/, '');
-        const url = `${host}:${port}/mcp`;
-        const transport = new StreamableHTTPClientTransport(new URL(url));
-
-        await this.client.connect(transport);
-        this.initialized = true;
-        return this;
+    async init(): Promise<MCPClientService> {
+        this.initPromise ??= (async () => {
+            const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+            await createMcpServer().connect(serverTransport);
+            await this.client.connect(clientTransport);
+            return this;
+        })().catch((err) => {
+            this.initPromise = null;
+            throw err;
+        });
+        return this.initPromise;
     }
 
-    // call mcp server tools 
     async getTools() {
         await this.init();
         if (this.tools.length === 0) {
@@ -45,22 +45,11 @@ class MCPClientService {
     }
 
     async callTool(toolName: string, args: Record<string, any> = {}) {
-        if (!this.initialized) {
-        await this.init();
-    }
-        // await this.getTools();
-
-        // Find the tool by name to get the full tool object with spec
-        const tool = this.tools.find(t => t.name === toolName);
+        const tools = await this.getTools();
+        const tool = tools.find((t) => t.name === toolName);
         if (!tool) throw new Error(`Tool '${toolName}' not found`);
 
-        // Call the tool
-        const response = await this.client.callTool({
-            name: toolName,
-            arguments: args,
-        });
-
-        return response;
+        return this.client.callTool({ name: toolName, arguments: args });
     }
 }
 

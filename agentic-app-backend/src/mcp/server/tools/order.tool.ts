@@ -1,5 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getLatestOrders, getOrderById, getOrdersWithCustomerDetails, createOrder } from "../../../services/order.service.js";
+import { getLatestOrders, getOrderById, getOrdersWithCustomerDetails } from "../../../services/order.service.js";
 import { z } from "zod";
 
 const orderSchema = z.object({
@@ -19,7 +19,7 @@ export function registerOrderTools(mcpServer: McpServer) {
             title: "Get Latest Orders",
             description: "Get the latest orders list from the database. Can optionally specify a limit.",
             inputSchema: z.object({
-                limit: z.union([z.number(), z.string()]).optional().describe("Number of orders to retrieve")
+                limit: z.number().int().min(1).max(100).optional().describe("Number of orders to retrieve")
             }),
             outputSchema: z.object({
                 orders: z.array(orderSchema)
@@ -40,7 +40,7 @@ export function registerOrderTools(mcpServer: McpServer) {
             title: "Get Orders With Customer Details",
             description: "Get list of orders along with customer name, email, and phone contact info from the database.",
             inputSchema: z.object({
-                limit: z.union([z.number(), z.string()]).optional().describe("Number of orders to retrieve")
+                limit: z.number().int().min(1).max(100).optional().describe("Number of orders to retrieve")
             }),
             outputSchema: z.object({
                 ordersDetails: z.array(
@@ -70,7 +70,7 @@ export function registerOrderTools(mcpServer: McpServer) {
             title: "Get Order By ID",
             description: "Get order details by order ID (MongoDB _id or order number like ORD-1001)",
             inputSchema: z.object({
-                id: z.string().describe("Order ID or Order Number")
+                id: z.string().trim().min(1).max(254).describe("Order ID or Order Number")
             }),
             outputSchema: z.object({
                 order: orderSchema.optional()
@@ -78,31 +78,6 @@ export function registerOrderTools(mcpServer: McpServer) {
         },
         async ({ id }) => {
             const order = await getOrderById(id);
-            return {
-                content: [{ type: "text", text: JSON.stringify(order, null, 2) }],
-                structuredContent: { order },
-            };
-        }
-    );
-
-    mcpServer.registerTool(
-        "createOrder",
-        {
-            title: "Create Order",
-            description: "Create a new order in the database",
-            inputSchema: z.object({
-                customerId: z.string().describe("Customer ID who placed the order"),
-                totalAmount: z.number().describe("Total amount of the order"),
-                orderNumber: z.string().optional().describe("Optional order number/code"),
-                orderDate: z.string().optional().describe("Optional order date (ISO string)"),
-                status: z.enum(["pending", "completed", "cancelled"]).optional().describe("Order status ('pending', 'completed', or 'cancelled')")
-            }),
-            outputSchema: z.object({
-                order: orderSchema.optional()
-            })
-        },
-        async (args) => {
-            const order = await createOrder(args);
             return {
                 content: [{ type: "text", text: JSON.stringify(order, null, 2) }],
                 structuredContent: { order },

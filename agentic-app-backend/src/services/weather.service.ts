@@ -6,7 +6,7 @@ export async function fetchWeather(city: string): Promise<any> {
             if (!apiKey) {
                 return { error: { message: "WEATHER_API_KEY is not defined in environment variables." } };
             }
-            const baseUrl = `http://api.weatherapi.com/v1/current.json?key=${apiKey}&q=${encodeURIComponent(city.trim())}`;
+            const baseUrl = `https://api.weatherapi.com/v1/current.json?key=${apiKey}&q=${encodeURIComponent(city.trim())}`;
             const res = await fetch(baseUrl);
             const data = await res.json();
             return data;

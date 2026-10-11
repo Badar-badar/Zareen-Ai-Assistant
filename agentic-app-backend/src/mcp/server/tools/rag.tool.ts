@@ -10,10 +10,10 @@ export function registerRagTools(mcpServer: McpServer) {
     {
       title: "RAG Search",
       description: "Search through the indexed documents using semantic similarity.",
-      inputSchema: z.object({
-        query: z.string().describe("Search query for semantic document retrieval"),
-        topK: z.number().optional().describe("Number of top relevant chunks to retrieve"),
-      }),
+     inputSchema: z.object({
+      query: z.string().min(1).max(500).describe("Search query for semantic document retrieval"),
+      topK: z.number().int().min(1).max(10).optional().describe("Number of top relevant chunks to retrieve"),
+    }),
     },
     async ({ query, topK }) => {
       try {

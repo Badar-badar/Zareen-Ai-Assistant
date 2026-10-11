@@ -67,7 +67,7 @@ function formatOrder(doc: any) {
 export async function getLatestOrders(limit: number | string = 4) {
     try {
         const limitNum = typeof limit === "number" ? limit : parseInt(limit as any, 10);
-        const parsedLimit = isNaN(limitNum) ? 4 : limitNum;
+        const parsedLimit = Math.min(Math.max(isNaN(limitNum) ? 4 : limitNum, 1), 100);
         const docs = await OrderModel.find()
             .sort({ createdAt: -1 })
             .limit(parsedLimit);

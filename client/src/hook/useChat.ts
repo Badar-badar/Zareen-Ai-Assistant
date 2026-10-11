@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { Message } from '../types/chat';
-import { botApi } from '../api/botApi';
-
+import { botApi, resetSession } from '../api/botApi';
 export function useChat() {
   // Automatic System Dark/Light Theme Handler
   useEffect(() => {
@@ -82,6 +81,7 @@ export function useChat() {
 
 
   const resetChat = () => {
+    resetSession();
     setMessages([
       {
         id: '1',

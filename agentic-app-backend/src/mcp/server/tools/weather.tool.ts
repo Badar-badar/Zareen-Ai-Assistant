@@ -9,7 +9,7 @@ export function registerWeatherTools(mcpServer: McpServer) {
             title: "Get Weather",
             description: "Get the weather of a city from external API",
             inputSchema: z.object({
-                city: z.string().describe("City name")
+                city: z.string().trim().min(1).max(100).describe("City name")
             }),
             outputSchema: z.object({
                 weather: z.any(),
