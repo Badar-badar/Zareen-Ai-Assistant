@@ -8,6 +8,9 @@ const headers = () => ({
     Authorization: `Bearer ${getToken()}`,
 });
 
+const say = (text, actions = []) => ({ text, actions });
+
+// Returns { text, actions }. "actions" are pending proposals waiting for Confirm/Cancel.
 export const botApi = async (message) => {
     try {
         const response = await fetch(`${API}/api/chat`, {
@@ -19,23 +22,22 @@ export const botApi = async (message) => {
         if (response.status === 401) {
             clearToken();
             window.location.reload();
-            return "Session expired. Please sign in again.";
+            return say("Session expired. Please sign in again.");
         }
         if (response.status === 404) {
             sessionId = undefined;
-            return "That conversation expired. Please ask again.";
+            return say("That conversation expired. Please ask again.");
         }
-        if (response.status === 429) return "Too many requests. Please wait a minute.";
-        if (!response.ok) return data.error || "Error response from server.";
+        if (response.status === 429) return say("Too many requests. Please wait a minute.");
+        if (!response.ok) return say(data.error || "Error response from server.");
         if (data.sessionId) sessionId = data.sessionId;
-        return data.reply;
+        return say(data.reply, Array.isArray(data.pendingActions) ? data.pendingActions : []);
     } catch (error) {
         console.error("botApi Error:", error);
-        return "Sorry, I couldn't reach the server. Please check if backend is running.";
+        return say("Sorry, I couldn't reach the server. Please check if backend is running.");
     }
 };
 
-// "New chat": forget the session locally and delete it on the server
 export const resetSession = () => {
     const id = sessionId;
     sessionId = undefined;

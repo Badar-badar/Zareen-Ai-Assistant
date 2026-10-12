@@ -12,6 +12,8 @@ import mcpRouter from "./src/routes/mcp-server.route.js";
 import agentRouter from "./src/routes/agent.route.js";
 import ChatSession from "./src/models/chatSession.model.js";
 import User from "./src/models/user.model.js";
+import actionRouter from "./src/routes/action.route.js";
+import PendingAction from "./src/models/pendingAction.model.js";
 
 const app = express();
 app.disable("x-powered-by");
@@ -39,6 +41,7 @@ app.use("/api/orders", orderRouter);
 app.use("/api/weather", weatherRouter);
 app.use("/mcp", mcpRouter);
 app.use("/api/chat", agentRouter);
+app.use("/api/actions", actionRouter);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   const status = err.status ?? 500;
@@ -52,7 +55,7 @@ const HOST = process.env.HOST ?? "127.0.0.1";
 async function startServer() {
   try {
     await connectDB();
-    await Promise.all([ChatSession.init(), User.init()]);
+    await Promise.all([ChatSession.init(), User.init(), PendingAction.init()]);
     app.listen(PORT, HOST, () => {
       console.log(`Server is running on http://${HOST}:${PORT}`);
     });

@@ -12,3 +12,10 @@ export const userLimiter = rateLimit({
   limit: 10,
   keyGenerator: (req) => req.user!.id,
 });
+
+export const actionLimiter = rateLimit({
+  ...base,
+  windowMs: 60_000,
+  limit: 20,
+  keyGenerator: (req) => req.user!.id,
+});

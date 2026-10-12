@@ -61,11 +61,12 @@ export function useChat() {
     setIsTyping(true);
 
     try {
-      const replyText = await botApi(userText);
+      const reply = await botApi(userText);
       const botMsg: Message = {
         id: (Date.now() + 1).toString(),
         sender: 'bot',
-        text: replyText,
+        text: reply.text,
+        actions: reply.actions,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, botMsg]);

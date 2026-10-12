@@ -1,6 +1,7 @@
 import React, { useState, type RefObject } from 'react';
 import { Sparkles, Copy, Check } from 'lucide-react';
 import type { Message } from '../../types/chat';
+import { ActionCard } from './ActionCard';
 
 interface MessagesProps {
   messages: Message[];
@@ -121,7 +122,9 @@ export const Messages: React.FC<MessagesProps> = ({
                   </div>
 
                   <p className="whitespace-pre-wrap break-words">{msg.text}</p>
-
+                  {isBot && msg.actions?.map((a) => (
+                    <ActionCard key={a.id} action={a} />
+                  ))}
                   <div className="flex justify-end mt-1">
                     <span
                       className={`text-[9px] select-none ${

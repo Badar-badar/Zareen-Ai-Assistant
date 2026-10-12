@@ -35,3 +35,23 @@ export const CreateOrderBody = z
     status: z.enum(["pending", "completed", "cancelled"]).optional(),
   })
   .strict();
+
+
+  export const ObjectIdParam = z.object({ id: z.string().regex(/^[a-f\d]{24}$/i) });
+
+// What the AGENT may propose. Deliberately smaller than CreateOrderBody (least privilege):
+// no status, no order number, no date. The server fills those in.
+export const ProposeOrderInput = z
+  .object({
+    customerId: z.string().regex(/^[a-f\d]{24}$/i),
+    totalAmount: z.number().min(0.01).max(1_000_000).transform((n) => Math.round(n * 100) / 100),
+  })
+  .strict();
+
+export const ProposeCustomerInput = z
+  .object({
+    name: z.string().trim().min(1).max(100),
+    email: z.email().max(254).toLowerCase(),
+    phone: z.string().trim().max(30).optional(),
+  })
+  .strict();

@@ -34,6 +34,7 @@ export class AgentController {
                 sessionId: activeSessionId,
                 stopReason: result.stopReason,
                 steps: result.steps,
+                pendingActions: result.pendingActions,
             });
         } catch (error) {
             console.error("Agent chat error:", error);

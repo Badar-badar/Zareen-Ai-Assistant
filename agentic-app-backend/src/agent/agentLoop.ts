@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { GoogleGenAI, Content, Part } from "@google/genai";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { AGENT, ALLOWED_TOOLS } from "../config/agent.js";
+import { PROPOSE_DECLARATIONS, PROPOSE_TOOL_NAMES, runProposeTool } from "./proposeTools.js";
+import type { PendingView } from "../services/pendingAction.service.js";
 
 export type StopReason = "done" | "max_steps" | "timeout" | "budget" | "error";
 
@@ -12,6 +14,7 @@ export interface AgentResult {
   inputTokens: number;
   outputTokens: number;
   costUsd: number;
+  pendingActions: PendingView[];
 }
 
 const STOP_MESSAGES: Record<Exclude<StopReason, "done">, string> = {
@@ -28,7 +31,7 @@ interface RunOptions {
   prompt: string;
   mcpClient: Client;
   userId?: string;
-   history?: Content[];
+  history?: Content[];
 }
 
 export async function runAgentLoop(opts: RunOptions): Promise<AgentResult> {
@@ -38,12 +41,12 @@ export async function runAgentLoop(opts: RunOptions): Promise<AgentResult> {
   const startedAt = Date.now();
   const deadline = startedAt + AGENT.totalTimeoutMs;
 
-  // Structured logs. The prompt text is never logged (only its length): it may contain personal data.
   const log = (event: string, data: Record<string, unknown> = {}) =>
     console.log(JSON.stringify({ at: new Date().toISOString(), runId, userId, event, ...data }));
 
   let inputTokens = 0;
   let outputTokens = 0;
+  const pendingActions: PendingView[] = []; // proposals created during this run
   const costOf = () =>
     (inputTokens / 1e6) * AGENT.priceInputPerMTok + (outputTokens / 1e6) * AGENT.priceOutputPerMTok;
 
@@ -51,22 +54,36 @@ export async function runAgentLoop(opts: RunOptions): Promise<AgentResult> {
     const costUsd = Number(costOf().toFixed(6));
     log("run_end", {
       stopReason, steps, inputTokens, outputTokens, costUsd,
+      pendingActions: pendingActions.length,
       durationMs: Date.now() - startedAt,
     });
-    return { reply, stopReason, steps, inputTokens, outputTokens, costUsd };
+    return { reply, stopReason, steps, inputTokens, outputTokens, costUsd, pendingActions };
   };
 
-  // 1. Tell the model which tools exist
+  // 1. Tell the model which tools exist: read-only MCP tools, plus the two propose tools (only when we know the user)
   const { tools } = await mcpClient.listTools();
   const exposed = tools.filter((t) => ALLOWED_TOOLS.has(t.name));
-  const functionDeclarations = exposed.map((t) => {
+  const mcpDeclarations = exposed.map((t) => {
     const { $schema, ...schema } = t.inputSchema as Record<string, unknown>;
     return { name: t.name, description: t.description ?? t.title ?? "", parametersJsonSchema: schema };
   });
+  const functionDeclarations = [...mcpDeclarations, ...(userId ? PROPOSE_DECLARATIONS : [])];
   const allowedNames = new Set(exposed.map((t) => t.name));
 
   // 2. Run one tool call, with a timeout and a size cap on its result
   const runTool = async (name: string, args: Record<string, unknown>) => {
+    // The propose tools run here, with the verified user id. They only save a pending record.
+    if (PROPOSE_TOOL_NAMES.has(name)) {
+      if (!userId) return { output: `Tool "${name}" is not available.`, isError: true };
+      try {
+        const r = await runProposeTool(userId, name, args);
+        if (r.pending && !pendingActions.some((p) => p.id === r.pending!.id)) pendingActions.push(r.pending);
+        return { output: r.output, isError: r.isError };
+      } catch (err) {
+        return { output: `Tool failed: ${(err as Error).message}`, isError: true };
+      }
+    }
+
     if (!allowedNames.has(name)) return { output: `Tool "${name}" is not available.`, isError: true };
     try {
       const timeout = Math.max(1, Math.min(AGENT.toolTimeoutMs, deadline - Date.now()));
@@ -85,14 +102,16 @@ export async function runAgentLoop(opts: RunOptions): Promise<AgentResult> {
   };
 
   // 3. The loop
-const contents: Content[] = [...history, { role: "user", parts: [{ text: prompt }] }];
-  log("run_start", { promptChars: prompt.length, maxSteps: AGENT.maxSteps, tools: [...allowedNames] });
+  const contents: Content[] = [...history, { role: "user", parts: [{ text: prompt }] }];
+  log("run_start", {
+    promptChars: prompt.length, historyMessages: history.length, maxSteps: AGENT.maxSteps,
+    tools: functionDeclarations.map((d) => d.name),
+  });
 
   for (let step = 1; step <= AGENT.maxSteps; step++) {
     if (Date.now() >= deadline) return finish(STOP_MESSAGES.timeout, "timeout", step - 1);
     if (inputTokens + outputTokens >= AGENT.tokenBudget) return finish(STOP_MESSAGES.budget, "budget", step - 1);
 
-    // 3a. Call the model (automatic tool-running is switched off: this loop does it)
     let response;
     try {
       response = await gemini.models.generateContent({
@@ -114,7 +133,6 @@ const contents: Content[] = [...history, { role: "user", parts: [{ text: prompt 
       return finish(STOP_MESSAGES.error, "error", step - 1);
     }
 
-    // 3b. Count tokens and cost for this step
     const usage = response.usageMetadata;
     const stepIn = usage?.promptTokenCount ?? 0;
     const stepOut = (usage?.candidatesTokenCount ?? 0) + (usage?.thoughtsTokenCount ?? 0);
@@ -129,19 +147,16 @@ const contents: Content[] = [...history, { role: "user", parts: [{ text: prompt 
       toolCalls: calls.map((c) => c.name),
     });
 
-    // 3c. No tool requested: the model is finished
     if (calls.length === 0) {
       const text = (response.text ?? "").trim();
       if (!text) return finish(STOP_MESSAGES.error, "error", step);
       return finish(text, "done", step);
     }
 
-    // 3d. Keep the model's reply in the history exactly as returned
     const modelContent = response.candidates?.[0]?.content;
     if (!modelContent) return finish(STOP_MESSAGES.error, "error", step);
     contents.push(modelContent);
 
-    // 3e. Run the requested tools and send every result back
     const resultParts: Part[] = [];
     for (let i = 0; i < calls.length; i++) {
       const call = calls[i];
@@ -166,6 +181,5 @@ const contents: Content[] = [...history, { role: "user", parts: [{ text: prompt 
     contents.push({ role: "user", parts: resultParts });
   }
 
-  // The cap was hit while the model still wanted to call tools
   return finish(STOP_MESSAGES.max_steps, "max_steps", AGENT.maxSteps);
 }
