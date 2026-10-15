@@ -18,6 +18,22 @@ services:
     volumes:
       - mongovol:/data/db
 
+  # The backend itself. Off by default, so `docker compose up -d` still starts only the databases.
+  # Start everything with:  docker compose --profile app up -d --build
+  api:
+    profiles: ["app"]
+    build: .
+    restart: unless-stopped
+    depends_on: [postgres, mongo]
+    env_file: .env
+    environment:
+      # Inside Docker the databases are reached by service name, not 127.0.0.1
+      MONGODB_URI: mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASSWORD}@mongo:27017/zareena?authSource=admin
+      POSTGRES_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/postgres
+      HOST: 0.0.0.0   # listen inside the container...
+      PORT: "4200"
+    ports: ["127.0.0.1:4200:4200"]   # ...but publish only to this computer
+
 volumes:
   pgvol:
   mongovol:

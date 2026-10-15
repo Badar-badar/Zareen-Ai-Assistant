@@ -93,7 +93,7 @@ export async function confirmAction(userId: string, id: string): Promise<ActionO
   const claimed = await PendingAction.findOneAndUpdate(
     { _id: id, userId, status: "pending", expiresAt: { $gt: now } },
     { $set: { status: "confirmed" } },
-    { new: true }
+    { returnDocument: "after" }
   );
   if (!claimed) return explainFailure(userId, id);
 
@@ -131,7 +131,7 @@ export async function cancelAction(userId: string, id: string): Promise<ActionOu
   const res = await PendingAction.findOneAndUpdate(
     { _id: id, userId, status: "pending" },
     { $set: { status: "cancelled" } },
-    { new: true }
+    { returnDocument: "after" }
   );
   if (!res) return explainFailure(userId, id);
   return { ok: true, id, status: "cancelled" };
