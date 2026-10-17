@@ -13,25 +13,12 @@ vi.mock("../src/config/agent.js", () => ({
     priceInputPerMTok: 1,
     priceOutputPerMTok: 2,
   },
-  ALLOWED_TOOLS: new Set(["getLatestOrders", "getCustomers"]),
+  ALLOWED_TOOLS: new Set(["getLatestOrders", "getCustomers", "proposeCreateOrder", "proposeCreateCustomer"]),
 }));
 
-// The propose tools need a database, so the loop is tested with a stand-in
-vi.mock("../src/agent/proposeTools.js", async (orig) => {
-  const actual = await orig<typeof import("../src/agent/proposeTools.js")>();
-  return {
-    ...actual,
-    runProposeTool: vi.fn(async () => ({
-      output: "Saved as a PENDING proposal",
-      isError: false,
-      pending: { id: "a".repeat(24), type: "createOrder", summary: "Create order", expiresAt: new Date().toISOString() },
-    })),
-  };
-});
 
 import { AGENT } from "../src/config/agent.js";
 import { runAgentLoop } from "../src/agent/agentLoop.js";
-import { runProposeTool } from "../src/agent/proposeTools.js";
 
 const base = { model: "m", systemInstruction: "sys", prompt: "hello", userId: "u1" };
 const LOOP_FOREVER = [{ calls: [{ name: "getLatestOrders", args: { limit: 1 } }] }];
@@ -42,7 +29,6 @@ beforeEach(() => {
   AGENT.tokenBudget = 100_000;
   AGENT.maxToolCallsPerStep = 2;
   AGENT.maxToolResultChars = 50;
-  vi.mocked(runProposeTool).mockClear();
 });
 
 describe("Day 2: the loop always stops", () => {
@@ -191,31 +177,42 @@ describe("Day 3: history", () => {
   });
 });
 
-describe("Day 4: the agent can only propose", () => {
-  it("collects proposals and tells the model nothing was created", async () => {
+// A fake MCP client that behaves like the per-request server: it lists only the tools
+// this user has, and a propose tool returns a saved record in structuredContent.pending.
+const pendingView = (id: string) => ({
+  id,
+  type: "createOrder",
+  summary: "Create order",
+  expiresAt: new Date().toISOString(),
+});
+
+function proposeClient(toolNames: string[], opts: { pendingId?: string; isError?: boolean } = {}) {
+  const callTool = vi.fn(async (_req: any) => ({
+    content: [{ type: "text", text: "Saved as PENDING" }],
+    ...(opts.isError ? { isError: true } : {}),
+    structuredContent: { pending: pendingView(opts.pendingId ?? "a".repeat(24)) },
+  }));
+  const listTools = vi.fn(async () => ({
+    tools: toolNames.map((name) => ({
+      name,
+      description: "",
+      inputSchema: { type: "object", properties: {} },
+    })),
+  }));
+  return { client: { listTools, callTool } as any, callTool };
+}
+
+describe("Day 4/6: the agent can only propose", () => {
+  it("collects a proposal from the server's saved record", async () => {
     const { gemini } = fakeGemini([
       { calls: [{ name: "proposeCreateOrder", args: { customerId: "a".repeat(24), totalAmount: 5 } }] },
       { text: "Waiting for your confirmation" },
     ]);
-    const mcp = fakeMcp(["getLatestOrders"]);
+    const mcp = proposeClient(["getLatestOrders", "proposeCreateOrder"]);
     const r = await runAgentLoop({ ...base, gemini, mcpClient: mcp.client });
     expect(r.pendingActions).toHaveLength(1);
-    expect(runProposeTool).toHaveBeenCalledWith("u1", "proposeCreateOrder", expect.any(Object));
-    expect(mcp.callTool).not.toHaveBeenCalled(); // the propose tool never goes through MCP
-  });
-
-  it("never offers the propose tools when the user is unknown", async () => {
-    const { gemini, generateContent } = fakeGemini([{ text: "hi" }]);
-    await runAgentLoop({ ...base, userId: undefined, gemini, mcpClient: fakeMcp(["getLatestOrders"]).client });
-    const names = generateContent.mock.calls[0][0].config.tools[0].functionDeclarations.map((d: any) => d.name);
-    expect(names).not.toContain("proposeCreateOrder");
-  });
-
-  it("refuses a propose call when there is no user", async () => {
-    const { gemini } = fakeGemini([{ calls: [{ name: "proposeCreateOrder", args: {} }] }, { text: "x" }]);
-    const r = await runAgentLoop({ ...base, userId: undefined, gemini, mcpClient: fakeMcp([]).client });
-    expect(runProposeTool).not.toHaveBeenCalled();
-    expect(r.pendingActions).toHaveLength(0);
+    expect(r.pendingActions[0].id).toBe("a".repeat(24));
+    expect(mcp.callTool).toHaveBeenCalledTimes(1);
   });
 
   it("does not list the same proposal twice", async () => {
@@ -223,7 +220,42 @@ describe("Day 4: the agent can only propose", () => {
       { calls: [{ name: "proposeCreateOrder", args: {} }, { name: "proposeCreateOrder", args: {} }] },
       { text: "ok" },
     ]);
-    const r = await runAgentLoop({ ...base, gemini, mcpClient: fakeMcp([]).client });
+    const mcp = proposeClient(["proposeCreateOrder"]);
+    const r = await runAgentLoop({ ...base, gemini, mcpClient: mcp.client });
     expect(r.pendingActions).toHaveLength(1);
+  });
+
+  it("does not collect a proposal when the tool reported an error", async () => {
+    const { gemini } = fakeGemini([
+      { calls: [{ name: "proposeCreateOrder", args: {} }] },
+      { text: "failed" },
+    ]);
+    const mcp = proposeClient(["proposeCreateOrder"], { isError: true });
+    const r = await runAgentLoop({ ...base, gemini, mcpClient: mcp.client });
+    expect(r.pendingActions).toHaveLength(0);
+  });
+
+  it("only trusts propose tools: a read tool cannot add a card", async () => {
+    const { gemini } = fakeGemini([
+      { calls: [{ name: "getLatestOrders", args: {} }] },
+      { text: "ok" },
+    ]);
+    const mcp = proposeClient(["getLatestOrders"]); // returns structuredContent.pending anyway
+    const r = await runAgentLoop({ ...base, gemini, mcpClient: mcp.client });
+    expect(r.pendingActions).toHaveLength(0);
+  });
+
+  it("viewer case: a propose tool missing from the server is never shown and never called", async () => {
+    const { gemini, generateContent } = fakeGemini([
+      { calls: [{ name: "proposeCreateOrder", args: { customerId: "a".repeat(24), totalAmount: 5 } }] },
+      { text: "I can't create orders for your account" },
+    ]);
+    const mcp = proposeClient(["getLatestOrders"]); // a viewer's server has no propose tools
+    const r = await runAgentLoop({ ...base, gemini, mcpClient: mcp.client });
+
+    const shown = generateContent.mock.calls[0][0].config.tools[0].functionDeclarations.map((d: any) => d.name);
+    expect(shown).not.toContain("proposeCreateOrder");
+    expect(mcp.callTool).not.toHaveBeenCalled();
+    expect(r.pendingActions).toHaveLength(0);
   });
 });

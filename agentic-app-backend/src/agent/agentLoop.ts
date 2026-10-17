@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import type { GoogleGenAI, Content, Part } from "@google/genai";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { AGENT, ALLOWED_TOOLS } from "../config/agent.js";
-import { PROPOSE_DECLARATIONS, PROPOSE_TOOL_NAMES, runProposeTool } from "./proposeTools.js";
 import type { PendingView } from "../services/pendingAction.service.js";
 
 export type StopReason = "done" | "max_steps" | "timeout" | "budget" | "error";
@@ -60,34 +59,29 @@ export async function runAgentLoop(opts: RunOptions): Promise<AgentResult> {
     return { reply, stopReason, steps, inputTokens, outputTokens, costUsd, pendingActions };
   };
 
-  // 1. Tell the model which tools exist: read-only MCP tools, plus the two propose tools (only when we know the user)
+  // 1. Tell the model which tools exist. The per-request server already hides tools this user
+  //    may not use; ALLOWED_TOOLS is a second filter on top of that.
   const { tools } = await mcpClient.listTools();
   const exposed = tools.filter((t) => ALLOWED_TOOLS.has(t.name));
-  const mcpDeclarations = exposed.map((t) => {
+  const functionDeclarations = exposed.map((t) => {
     const { $schema, ...schema } = t.inputSchema as Record<string, unknown>;
     return { name: t.name, description: t.description ?? t.title ?? "", parametersJsonSchema: schema };
   });
-  const functionDeclarations = [...mcpDeclarations, ...(userId ? PROPOSE_DECLARATIONS : [])];
   const allowedNames = new Set(exposed.map((t) => t.name));
 
   // 2. Run one tool call, with a timeout and a size cap on its result
   const runTool = async (name: string, args: Record<string, unknown>) => {
-    // The propose tools run here, with the verified user id. They only save a pending record.
-    if (PROPOSE_TOOL_NAMES.has(name)) {
-      if (!userId) return { output: `Tool "${name}" is not available.`, isError: true };
-      try {
-        const r = await runProposeTool(userId, name, args);
-        if (r.pending && !pendingActions.some((p) => p.id === r.pending!.id)) pendingActions.push(r.pending);
-        return { output: r.output, isError: r.isError };
-      } catch (err) {
-        return { output: `Tool failed: ${(err as Error).message}`, isError: true };
-      }
-    }
-
     if (!allowedNames.has(name)) return { output: `Tool "${name}" is not available.`, isError: true };
     try {
       const timeout = Math.max(1, Math.min(AGENT.toolTimeoutMs, deadline - Date.now()));
       const result: any = await mcpClient.callTool({ name, arguments: args }, undefined, { timeout });
+
+      // Proposals come from the server's saved record, never from the model's text
+      const pending = result.structuredContent?.pending;
+      if (name.startsWith("propose") && !result.isError && pending?.id && !pendingActions.some((p) => p.id === pending.id)) {
+        pendingActions.push(pending as PendingView);
+      }
+
       let text = ((result.content ?? []) as any[])
         .filter((c) => c.type === "text")
         .map((c) => c.text)
