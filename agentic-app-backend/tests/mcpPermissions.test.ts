@@ -18,6 +18,7 @@ describe("Day 6: permissions are enforced inside the server", () => {
     expect(names).toContain("findCustomers");
     expect(names).not.toContain("proposeCreateOrder");
     expect(names).not.toContain("proposeCreateCustomer");
+    expect(names).not.toContain("proposeUpdateOrderStatus");
   });
 
   it("staff and admin see the propose tools", async () => {
@@ -25,6 +26,7 @@ describe("Day 6: permissions are enforced inside the server", () => {
       const names = await toolNames(role);
       expect(names).toContain("proposeCreateOrder");
       expect(names).toContain("proposeCreateCustomer");
+      expect(names).toContain("proposeUpdateOrderStatus");
     }
   });
 

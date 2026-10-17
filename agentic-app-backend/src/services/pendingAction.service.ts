@@ -4,13 +4,14 @@ import PendingAction from "../models/pendingAction.model.js";
 import CustomerModel from "../models/customer.model.js";
 import { createOrder } from "./order.service.js";
 import { createCustomer } from "./customer.service.js";
-import { ProposeOrderInput, ProposeCustomerInput } from "../validation/schemas.js";
+import { ProposeOrderInput, ProposeCustomerInput, ProposeStatusInput } from "../validation/schemas.js";
 import { PENDING } from "../config/pending.js";
 import UserModel from "../models/user.model.js";
 import { can, toRole } from "../mcp/permissions.js";
+import OrderModel from "../models/order.model.js";
 export interface PendingView {
   id: string;
-  type: "createOrder" | "createCustomer";
+  type: "createOrder" | "createCustomer" | "updateOrderStatus";
   summary: string;
   expiresAt: string;
 }
@@ -30,7 +31,7 @@ const toView = (d: { _id: mongoose.Types.ObjectId; type: string; summary: string
 });
 
 // Saves the proposal. Writes NOTHING to the customers or orders collections.
-async function savePending(userId: string, type: "createOrder" | "createCustomer", payload: object, summary: string): Promise<ProposeResult> {
+async function savePending(userId: string, type: "createOrder" | "createCustomer" | "updateOrderStatus", payload: object, summary: string): Promise<ProposeResult> {
   const now = new Date();
   const fingerprint = fingerprintOf(userId, type, payload);
 
@@ -93,7 +94,7 @@ export async function confirmAction(userId: string, id: string): Promise<ActionO
   if (!found) return { ok: false, status: 404, error: "Action not found" };
 
   const user = await UserModel.findById(userId).select("role").lean<{ role?: string }>();
-  const needed = found.type === "createOrder" ? "orders:propose" : "customers:propose";
+ const needed = found.type === "createCustomer" ? "customers:propose" : "orders:propose";
   if (!user || !can(toRole(user.role), needed)) {
     return { ok: false, status: 403, error: "You don't have permission to confirm this action." };
   }
@@ -123,7 +124,19 @@ export async function confirmAction(userId: string, id: string): Promise<ActionO
       await PendingAction.updateOne({ _id: claimed._id }, { $set: { resultId: order.id, resultLabel: order.orderNumber } });
       return { ok: true, id, status: "confirmed", resultId: order.id, label: order.orderNumber };
     }
-
+         if (claimed.type === "updateOrderStatus") {
+      const p = ProposeStatusInput.safeParse(claimed.payload);
+      if (!p.success) return await fail("Stored update is invalid.");
+      const updated = await OrderModel.findOneAndUpdate(
+        { _id: p.data.orderId },
+        { $set: { status: p.data.status } },
+        { returnDocument: "after" }
+      );
+      if (!updated) return await fail("The order no longer exists.");
+      await PendingAction.updateOne({ _id: claimed._id }, { $set: { resultId: updated.id, resultLabel: updated.orderNumber } });
+      return { ok: true, id, status: "confirmed", resultId: updated.id, label: updated.orderNumber };
+    }
+    
     const p = ProposeCustomerInput.safeParse(claimed.payload);
     if (!p.success) return await fail("Stored customer data is invalid.");
     if (await CustomerModel.exists({ email: p.data.email })) return await fail("A customer with this email already exists.");
@@ -145,4 +158,19 @@ export async function cancelAction(userId: string, id: string): Promise<ActionOu
   );
   if (!res) return explainFailure(userId, id);
   return { ok: true, id, status: "cancelled" };
+}
+
+export async function proposeOrderStatus(userId: string, raw: unknown): Promise<ProposeResult> {
+  const parsed = ProposeStatusInput.safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, error: "Invalid update. Need orderId (24-character id from an order lookup) and status: pending, completed or cancelled." };
+  }
+  const { orderId, status } = parsed.data;
+
+  const order = await OrderModel.findById(orderId).lean<{ orderNumber: string; status: string }>();
+  if (!order) return { ok: false, error: "No order with that id. Look the order up with getOrderById and use its id." };
+  if (order.status === status) return { ok: false, error: `Order ${order.orderNumber} is already ${status}. Nothing to change.` };
+
+  const summary = `Change order ${order.orderNumber} status from ${order.status} to ${status}`;
+  return savePending(userId, "updateOrderStatus", { orderId, status }, summary);
 }

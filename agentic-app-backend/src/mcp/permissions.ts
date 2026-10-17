@@ -6,11 +6,12 @@ export type Permission =
   | "weather:read"
   | "knowledge:read"
   | "customers:propose"
-  | "orders:propose";
+  | "orders:propose"
+  | "orders:write";
+
 
 const READ: Permission[] = ["customers:read", "orders:read", "weather:read", "knowledge:read"];
-const WRITE: Permission[] = ["customers:propose", "orders:propose"];
-
+const WRITE: Permission[] = ["customers:propose", "orders:propose", "orders:write"];
 const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   viewer: READ,
   staff: [...READ, ...WRITE],
@@ -31,6 +32,8 @@ export const TOOL_PERMISSIONS: Record<string, Permission> = {
   ragSearch: "knowledge:read",
   proposeCreateOrder: "orders:propose",
   proposeCreateCustomer: "customers:propose",
+  proposeUpdateOrderStatus: "orders:propose",
+
 };
 
 export interface UserContext {

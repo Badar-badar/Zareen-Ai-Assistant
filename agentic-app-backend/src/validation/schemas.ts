@@ -55,3 +55,12 @@ export const ProposeCustomerInput = z
     phone: z.string().trim().max(30).optional(),
   })
   .strict();
+
+  export const ORDER_STATUSES = ["pending", "completed", "cancelled"] as const;
+
+export const ProposeStatusInput = z
+  .object({
+    orderId: z.string().regex(/^[a-f\d]{24}$/i),
+    status: z.enum(ORDER_STATUSES),
+  })
+  .strict();

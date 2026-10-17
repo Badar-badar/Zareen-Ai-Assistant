@@ -4,11 +4,11 @@ import OrderModel from "../../src/models/order.model.js";
 import PendingAction from "../../src/models/pendingAction.model.js";
 import UserModel from "../../src/models/user.model.js";
 import {
-  proposeOrder, proposeCustomer, confirmAction, cancelAction,
+  proposeOrder, proposeCustomer, confirmAction, cancelAction,proposeOrderStatus
 } from "../../src/services/pendingAction.service.js";
 import { PENDING } from "../../src/config/pending.js";
 import { hasDb, useTestDb, makeCustomer, makeUser } from "./dbHelper.js";
-
+import { createOrder } from "../../src/services/order.service.js";
 const orders = () => OrderModel.countDocuments();
 const customers = () => CustomerModel.countDocuments();
 
@@ -194,4 +194,19 @@ describe.skipIf(!hasDb)("Day 4: nothing is written until the user confirms (real
     expect(await orders()).toBe(0);
   });
 
+    it("a status change is applied only on confirm, and only once", async () => {
+    const o = await createOrder({ customerId: await makeCustomer(), totalAmount: 5, status: "pending" });
+    const r = await proposeOrderStatus(alice, { orderId: o.id, status: "completed" });
+    if (!r.ok) throw new Error(r.error);
+    expect((await OrderModel.findById(o.id).lean<{ status: string }>())!.status).toBe("pending");
+    expect((await confirmAction(alice, r.view.id)).ok).toBe(true);
+    expect((await OrderModel.findById(o.id).lean<{ status: string }>())!.status).toBe("completed");
+    expect(await confirmAction(alice, r.view.id)).toMatchObject({ ok: false, status: 409 });
+  });
+
+  it("rejects a status outside the allowed list", async () => {
+    const o = await createOrder({ customerId: await makeCustomer(), totalAmount: 5 });
+    expect((await proposeOrderStatus(alice, { orderId: o.id, status: "refunded" })).ok).toBe(false);
+    expect(await PendingAction.countDocuments()).toBe(0);
+  });
 });

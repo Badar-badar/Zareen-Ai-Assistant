@@ -2,11 +2,11 @@ import express from "express";
 import { orderController } from "../controllers/orders.controller.js";
 import { validate } from "../middleware/validate.js";
 import { LimitQuery, IdParam, CreateOrderBody } from "../validation/schemas.js";
-
+import { requirePermission } from "../middleware/requirePermission.js";
 const router = express.Router();
 
 router.get("/", validate(LimitQuery, "query"), orderController.getAllOrders);
 router.get("/:id", validate(IdParam, "params"), orderController.getOrderById);
-router.post("/", validate(CreateOrderBody), orderController.createOrder);
+router.post("/", validate(CreateOrderBody), requirePermission("orders:write"), orderController.createOrder);
 
 export default router;
