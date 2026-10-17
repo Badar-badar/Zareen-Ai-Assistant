@@ -8,6 +8,6 @@ if (!email || !password || password.length < 12) {
   process.exit(1);
 }
 await mongoose.connect(process.env.MONGODB_URI!);
-await UserModel.create({ email: email.toLowerCase(), passwordHash: await hashPassword(password), role: "user" });
+await UserModel.create({ email: email.toLowerCase(), passwordHash: await hashPassword(password), role: "viewer" });
 console.log("created", email);
 await mongoose.disconnect();

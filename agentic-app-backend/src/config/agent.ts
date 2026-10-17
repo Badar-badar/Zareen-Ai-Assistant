@@ -22,9 +22,12 @@ export const AGENT = {
 export const ALLOWED_TOOLS = new Set([
   "getCustomers",
   "getCustomerById",
+  "findCustomers",
   "getLatestOrders",
   "getOrderWithCustomerDetails",
   "getOrderById",
   "fetchWeather",
   "ragSearch",
+  "proposeCreateOrder",
+  "proposeCreateCustomer",
 ]);

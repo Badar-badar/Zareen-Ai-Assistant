@@ -1,7 +1,8 @@
-import { MCPClient } from "../mcp/client/mcp-client.service.js";
 import { Request, Response } from "express";
 import { GIMINI } from "../services/gimini.service.js";
 import { SESSION } from "../config/session.js";
+import { openSession } from "../mcp/session.js";
+import { toRole } from "../mcp/permissions.js";
 import {
     getSession, startSession, appendExchange, deleteSession, buildHistory,
 } from "../services/session.service.js";
@@ -9,20 +10,26 @@ import {
 export class AgentController {
     static async chat(req: Request, res: Response) {
         const { message, sessionId } = req.body as { message: string; sessionId?: string };
-        const userId = req.user!.id; // always from the verified token, never from the request body
+        const userId = req.user!.id; // from the verified token, never from the body
+        const role = toRole(req.user!.role);
 
         try {
             let history: ReturnType<typeof buildHistory> = [];
             if (sessionId) {
                 const session = await getSession(userId, sessionId);
-                if (!session) return res.status(404).json({ error: "Session not found" }); // 404, so we never confirm someone else's session exists
+                if (!session) return res.status(404).json({ error: "Session not found" });
                 history = buildHistory(session.messages, SESSION.historyCharBudget);
             }
 
-            const mcp = await MCPClient.init();
-            const result = await GIMINI.generateResponseWithTools(message, mcp.client, { userId, history });
+            // One MCP server + client per request, built for THIS user, closed when done
+            const mcp = await openSession({ userId, role });
+            let result;
+            try {
+                result = await GIMINI.generateResponseWithTools(message, mcp.client, { userId, history });
+            } finally {
+                await mcp.close();
+            }
 
-            // Only successful answers are remembered. A "couldn't finish" message never becomes history.
             let activeSessionId = sessionId;
             if (result.stopReason === "done") {
                 if (sessionId) await appendExchange(userId, sessionId, message, result.reply);

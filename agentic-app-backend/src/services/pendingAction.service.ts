@@ -6,7 +6,8 @@ import { createOrder } from "./order.service.js";
 import { createCustomer } from "./customer.service.js";
 import { ProposeOrderInput, ProposeCustomerInput } from "../validation/schemas.js";
 import { PENDING } from "../config/pending.js";
-
+import UserModel from "../models/user.model.js";
+import { can, toRole } from "../mcp/permissions.js";
 export interface PendingView {
   id: string;
   type: "createOrder" | "createCustomer";
@@ -73,7 +74,7 @@ export async function proposeCustomer(userId: string, raw: unknown): Promise<Pro
   return savePending(userId, "createCustomer", { name, email, ...(phone ? { phone } : {}) }, summary);
 }
 
-type Failure = { ok: false; status: 404 | 409 | 410 | 500; error: string };
+type Failure = { ok: false; status: 403 | 404 | 409 | 410 | 500; error: string };
 export type ActionOutcome =
   | { ok: true; id: string; status: "confirmed" | "cancelled"; resultId?: string; label?: string }
   | Failure;
@@ -87,6 +88,15 @@ async function explainFailure(userId: string, id: string): Promise<Failure> {
 }
 
 export async function confirmAction(userId: string, id: string): Promise<ActionOutcome> {
+    // Permission is checked against the CURRENT role in the database, not the token.
+  const found = await PendingAction.findOne({ _id: id, userId }).select("type").lean<{ type: string }>();
+  if (!found) return { ok: false, status: 404, error: "Action not found" };
+
+  const user = await UserModel.findById(userId).select("role").lean<{ role?: string }>();
+  const needed = found.type === "createOrder" ? "orders:propose" : "customers:propose";
+  if (!user || !can(toRole(user.role), needed)) {
+    return { ok: false, status: 403, error: "You don't have permission to confirm this action." };
+  }
   const now = new Date();
 
   // ONE atomic step: only the first caller can move pending -> confirmed. A double-click gets null.

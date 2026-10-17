@@ -4,7 +4,7 @@ import ChatSession from "../../src/models/chatSession.model.js";
 import PendingAction from "../../src/models/pendingAction.model.js";
 import CustomerModel from "../../src/models/customer.model.js";
 import OrderModel from "../../src/models/order.model.js";
-
+import UserModel from "../../src/models/user.model.js";
 // Database tests run only when MONGODB_TEST_URI is set (CI sets it).
 export const TEST_URI = process.env.MONGODB_TEST_URI;
 export const hasDb = Boolean(TEST_URI);
@@ -21,8 +21,9 @@ export function useTestDb() {
   });
 
   beforeEach(async () => {
-    await Promise.all([
-      ChatSession.deleteMany({}), PendingAction.deleteMany({}), CustomerModel.deleteMany({}), OrderModel.deleteMany({}),
+      await Promise.all([
+      ChatSession.deleteMany({}), PendingAction.deleteMany({}), CustomerModel.deleteMany({}),
+      OrderModel.deleteMany({}), UserModel.deleteMany({}),
     ]);
   });
 
@@ -34,4 +35,9 @@ export function useTestDb() {
 export async function makeCustomer(name = "Bilal Khan", email = "bilal@example.com") {
   const c = await CustomerModel.create({ name, email });
   return c._id.toString();
+}
+
+export async function makeUser(role: "viewer" | "staff" | "admin", email = `${role}-${Math.random().toString(36).slice(2)}@example.com`) {
+  const u = await UserModel.create({ email, passwordHash: "x", role });
+  return u._id.toString();
 }

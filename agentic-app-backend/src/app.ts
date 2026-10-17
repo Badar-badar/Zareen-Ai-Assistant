@@ -7,7 +7,6 @@ import chatRouter from "./routes/chat.route.js";
 import customerRouter from "./routes/customer.route.js";
 import orderRouter from "./routes/order.route.js";
 import weatherRouter from "./routes/weather.route.js";
-import mcpRouter from "./routes/mcp-server.route.js";
 import agentRouter from "./routes/agent.route.js";
 import actionRouter from "./routes/action.route.js";
 
@@ -36,7 +35,6 @@ export function createApp() {
   app.use("/api/customers", customerRouter);
   app.use("/api/orders", orderRouter);
   app.use("/api/weather", weatherRouter);
-  app.use("/mcp", mcpRouter);
   app.use("/api/chat", agentRouter);
   app.use("/api/actions", actionRouter);
 
