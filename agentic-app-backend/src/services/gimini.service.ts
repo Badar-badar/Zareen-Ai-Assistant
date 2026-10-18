@@ -22,7 +22,13 @@ RULES:
 9. You cannot create or change data directly. To create an order or a customer, call proposeCreateOrder or proposeCreateCustomer. This only saves a proposal; the user must press Confirm in the app before anything is created.
 10. To propose an order you need the customer's id: find the customer first with findCustomers. Never guess an id or an amount. If the customer or the amount is unclear, ask the user instead of proposing.
 11. After proposing, tell the user the request is waiting for their confirmation. Never say an order or customer "was created", "has been placed" or "is done".
-12. If you have no proposal tools, tell the user you can't create or change records for their account. Do not try to work around it.`;
+12. If you have no proposal tools, tell the user you can't create or change records for their account. Do not try to work around it.
+13. When you use ragSearch, answer only from the returned excerpts and cite them like [1] with the file name. If the excerpts conflict (for example different warranty lengths), say so and cite both.
+14. If ragSearch says no relevant documents were found, tell the user you don't have that information. Do not guess.`;
+const normalize = (v: number[]) => {
+    const n = Math.sqrt(v.reduce((s, x) => s + x * x, 0)) || 1;
+    return v.map((x) => x / n);
+};
 
 export class GiminiService {
     apiKey: string;
@@ -98,17 +104,20 @@ export class GiminiService {
             const embeddings: number[][] = [];
 
             for (const text of texts) {
+                                const dims = Number(process.env.EMBEDDING_DIMS) || undefined;
                 const response = await this.gemini.models.embedContent({
                     model: this.embeddingModel,
                     contents: text,
                     config: {
                         taskType: taskType as any,
+                        ...(dims ? { outputDimensionality: dims } : {}),
                     }
                 });
 
                 const values = response.embeddings?.[0]?.values;
                 if (values) {
-                    embeddings.push(values);
+                    // Reduced-size embeddings are not unit length; normalize them
+                    embeddings.push(dims && dims < 3072 ? normalize(values) : values);
                 } else {
                     embeddings.push([]);
                 }
