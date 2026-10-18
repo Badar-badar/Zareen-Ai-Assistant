@@ -49,4 +49,22 @@ export class VectorStoreChroma {
             score: res.distances?.[0]?.[i] ?? null
         }));
     }
+
+
+        static async deleteByDoc(docId: string) {
+        await this.collection.delete({ where: { docId } });
+    }
+
+    static async getDocHash(docId: string): Promise<string | null> {
+        const res = await this.collection.get({ where: { docId }, include: ["metadatas"] });
+        const metas = res.metadatas ?? [];
+        if (!metas.length) return null;
+        const m: any = metas[0] ?? {};
+        return m.chunkCount === metas.length ? (m.docHash ?? null) : null;
+    }
+
+    static async listDocIds(): Promise<string[]> {
+        const res = await this.collection.get({ include: ["metadatas"] });
+        return [...new Set<string>((res.metadatas ?? []).map((m: any) => m?.docId).filter(Boolean))];
+    }
 }
