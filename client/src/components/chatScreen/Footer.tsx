@@ -1,11 +1,12 @@
 import React from 'react';
-import { Send, Sparkles } from 'lucide-react';
+import { Send, Square } from 'lucide-react';
 
 interface FooterProps {
   input: string;
   setInput: (value: string) => void;
   isTyping: boolean;
   onSend: (e?: React.FormEvent) => void;
+  onStop: () => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
@@ -13,6 +14,7 @@ export const Footer: React.FC<FooterProps> = ({
   setInput,
   isTyping,
   onSend,
+  onStop,
 }) => {
   const quickPrompts = [
     '✨ How can you help?',
@@ -59,18 +61,25 @@ export const Footer: React.FC<FooterProps> = ({
           )}
         </div>
 
-        <button
-          type="submit"
-          disabled={!input.trim() || isTyping}
-          className="p-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white font-medium rounded-xl transition-all duration-150 cursor-pointer shadow-xs shrink-0 active:scale-95 flex items-center justify-center"
-          title="Send message"
-        >
-          {isTyping ? (
-            <Sparkles className="w-4 h-4 animate-spin" />
-          ) : (
+        {isTyping ? (
+          <button
+            type="button"
+            onClick={onStop}
+            className="p-2.5 bg-red-600 hover:bg-red-500 text-white font-medium rounded-xl transition-all duration-150 cursor-pointer shadow-xs shrink-0 active:scale-95 flex items-center justify-center"
+            title="Stop generating"
+          >
+            <Square className="w-4 h-4" />
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={!input.trim()}
+            className="p-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white font-medium rounded-xl transition-all duration-150 cursor-pointer shadow-xs shrink-0 active:scale-95 flex items-center justify-center"
+            title="Send message"
+          >
             <Send className="w-4 h-4" />
-          )}
-        </button>
+          </button>
+        )}
       </form>
     </footer>
   );

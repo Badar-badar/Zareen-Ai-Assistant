@@ -67,6 +67,8 @@ export const Messages: React.FC<MessagesProps> = ({
       ) : (
         messages.map((msg) => {
           const isBot = msg.sender === 'bot';
+          // While streaming, the bot bubble starts empty; show only the typing dots until text arrives
+          if (isBot && msg.text === '' && !msg.actions?.length) return null;
           const isCopied = copiedId === msg.id;
 
           return (
@@ -141,8 +143,8 @@ export const Messages: React.FC<MessagesProps> = ({
         })
       )}
 
-      {/* Typing Indicator */}
-      {isTyping && (
+      {/* Typing Indicator: shown only until the first streamed text arrives */}
+      {isTyping && messages[messages.length - 1]?.text === '' && (
         <div className="flex justify-start animate-fadeIn">
           <div className="flex gap-1 py-1.5 px-3 bg-white dark:bg-[#1f2c34] rounded-xl rounded-bl-xs border border-slate-200/80 dark:border-slate-700/50 shadow-2xs">
             <span className="w-1.5 h-1.5 bg-emerald-500 dark:bg-emerald-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
