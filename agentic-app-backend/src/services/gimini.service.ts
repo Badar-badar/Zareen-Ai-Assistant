@@ -61,10 +61,17 @@ export class GiminiService {
         }
     }
 
-         async generateResponseWithTools(
+             async generateResponseWithTools(
         prompt: string,
         mcpClient: Client,
-        ctx: { userId?: string; history?: Content[] } = {}
+        ctx: {
+            userId?: string;
+            history?: Content[];
+            signal?: AbortSignal;
+            onDelta?: (text: string) => void;
+            onReset?: () => void;
+            onReplace?: (text: string) => void;
+        } = {}
     ): Promise<AgentResult> {
         return runAgentLoop({
             gemini: this.gemini,
@@ -72,8 +79,7 @@ export class GiminiService {
             systemInstruction: SYSTEM_PROMPT,
             prompt,
             mcpClient,
-            userId: ctx.userId,
-            history: ctx.history,
+            ...ctx,
         });
     }
 

@@ -8,5 +8,5 @@ const router = express.Router();
 
 router.post("/", userLimiter, validate(ChatBody), agentController.chat);
 router.delete("/:sessionId", validate(SessionIdParam, "params"), agentController.deleteSession);
-
+router.post("/stream", userLimiter, validate(ChatBody), agentController.stream);
 export default router;

@@ -23,7 +23,7 @@ export function ActionCard({ action }: { action: PendingAction }) {
     const r = await (verb === 'confirm' ? confirmAction(action.id) : cancelAction(action.id));
     if (r.ok) {
       setState(verb === 'confirm' ? 'confirmed' : 'cancelled');
-      setNote(verb === 'confirm' ? `Created${r.label ? `: ${r.label}` : ''}` : 'Cancelled. Nothing was created.');
+      setNote(verb === 'confirm' ? `Done${r.label ? `: ${r.label}` : ''}` : 'Cancelled. Nothing was created.');
     } else {
       setState('error');
       setNote(r.error ?? 'Something went wrong.');

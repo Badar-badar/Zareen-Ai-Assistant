@@ -13,6 +13,7 @@ export const ChatBot: React.FC = () => {
     messagesEndRef,
     sendMessage,
     resetChat,
+    stopGenerating,
   } = useChat();
 
   const handleSelectSuggestion = (suggestionText: string) => {
@@ -33,6 +34,7 @@ export const ChatBot: React.FC = () => {
         setInput={setInput}
         isTyping={isTyping}
         onSend={sendMessage}
+        onStop={stopGenerating}
       />
     </div>
   );
