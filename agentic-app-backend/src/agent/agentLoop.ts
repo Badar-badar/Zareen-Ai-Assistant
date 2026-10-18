@@ -3,7 +3,10 @@ import type { GoogleGenAI, Content, Part } from "@google/genai";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { AGENT, ALLOWED_TOOLS } from "../config/agent.js";
 import type { PendingView } from "../services/pendingAction.service.js";
-
+import { wrapUntrusted } from "../guard/untrusted.js";
+import { detectInjection } from "../guard/detect.js";
+import { sanitizeReply } from "../guard/output.js";
+import { securityLog } from "../guard/log.js";
 export type StopReason = "done" | "max_steps" | "timeout" | "budget" | "error";
 
 export interface AgentResult {
@@ -71,7 +74,10 @@ export async function runAgentLoop(opts: RunOptions): Promise<AgentResult> {
 
   // 2. Run one tool call, with a timeout and a size cap on its result
   const runTool = async (name: string, args: Record<string, unknown>) => {
-    if (!allowedNames.has(name)) return { output: `Tool "${name}" is not available.`, isError: true };
+       if (!allowedNames.has(name)) {
+      securityLog("tool_call_blocked", { runId, userId, tool: name, reason: "not_available" });
+      return { output: `Tool "${name}" is not available.`, isError: true };
+    }
     try {
       const timeout = Math.max(1, Math.min(AGENT.toolTimeoutMs, deadline - Date.now()));
       const result: any = await mcpClient.callTool({ name, arguments: args }, undefined, { timeout });
@@ -89,12 +95,20 @@ export async function runAgentLoop(opts: RunOptions): Promise<AgentResult> {
       if (text.length > AGENT.maxToolResultChars) {
         text = text.slice(0, AGENT.maxToolResultChars) + "\n...[truncated]";
       }
-      return { output: text, isError: Boolean(result.isError) };
+           const found = detectInjection(text);
+      if (found.risk !== "none") {
+        securityLog("tool_result_flagged", { runId, userId, tool: name, risk: found.risk, matches: found.matches });
+      }
+      return { output: wrapUntrusted(name, text), isError: Boolean(result.isError) };
     } catch (err) {
       return { output: `Tool failed: ${(err as Error).message}`, isError: true };
     }
   };
-
+ 
+    const inputCheck = detectInjection(prompt);
+  if (inputCheck.risk !== "none") {
+    securityLog("user_input_flagged", { runId, userId, risk: inputCheck.risk, matches: inputCheck.matches });
+  }
   // 3. The loop
   const contents: Content[] = [...history, { role: "user", parts: [{ text: prompt }] }];
   log("run_start", {
@@ -141,10 +155,13 @@ export async function runAgentLoop(opts: RunOptions): Promise<AgentResult> {
       toolCalls: calls.map((c) => c.name),
     });
 
-    if (calls.length === 0) {
+        if (calls.length === 0) {
       const text = (response.text ?? "").trim();
       if (!text) return finish(STOP_MESSAGES.error, "error", step);
-      return finish(text, "done", step);
+      const clean = sanitizeReply(text);
+      if (clean.removed.length) securityLog("output_stripped", { runId, userId, removed: clean.removed });
+      if (!clean.text) return finish(STOP_MESSAGES.error, "error", step);
+      return finish(clean.text, "done", step);
     }
 
     const modelContent = response.candidates?.[0]?.content;

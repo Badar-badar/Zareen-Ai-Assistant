@@ -8,6 +8,7 @@ import { ProposeOrderInput, ProposeCustomerInput } from "../validation/schemas.j
 import { PENDING } from "../config/pending.js";
 import UserModel from "../models/user.model.js";
 import { can, toRole } from "../mcp/permissions.js";
+import { sanitizeInline } from "../guard/untrusted.js";
 export interface PendingView {
   id: string;
   type: "createOrder" | "createCustomer";
@@ -17,7 +18,10 @@ export interface PendingView {
 
 type ProposeResult = { ok: true; view: PendingView; duplicate: boolean } | { ok: false; error: string };
 
-const short = (s: string, n = 80) => (s.length > n ? s.slice(0, n) + "…" : s);
+const short = (s: string, n = 80) => {
+  const c = sanitizeInline(s, 10_000);
+  return c.length > n ? c.slice(0, n) + "…" : c;
+};
 
 const fingerprintOf = (userId: string, type: string, payload: unknown) =>
   createHash("sha256").update(JSON.stringify([userId, type, payload])).digest("hex");

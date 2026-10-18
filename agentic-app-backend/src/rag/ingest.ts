@@ -4,7 +4,7 @@ import * as path from "node:path";
 import { createHash } from "node:crypto";
 import { GIMINI } from "../services/gimini.service.js";
 import { chunkMarkdown } from "./chunker.js";
-
+import { screenChunks } from "../guard/detect.js";
 const MAX = Number(process.env.RAG_CHUNK_SIZE || 900);
 const OVERLAP = Number(process.env.RAG_CHUNK_OVERLAP || 100);
 const BATCH = 16;
@@ -47,7 +47,11 @@ export async function ingestFolder(folderPath: string) {
             continue;
         }
 
-        const chunks = chunkMarkdown(raw, { maxChars: MAX, overlapChars: OVERLAP });
+               const { clean: chunks, quarantined } = screenChunks(
+            chunkMarkdown(raw, { maxChars: MAX, overlapChars: OVERLAP }),
+            file
+        );
+        if (quarantined.length) console.warn(`${file}: ${quarantined.length} chunk(s) quarantined, not indexed`);
         console.log(`Processing ${file} (${chunks.length} chunks)...`);
 
         // Embed everything first: if this fails, the old chunks are still in place
