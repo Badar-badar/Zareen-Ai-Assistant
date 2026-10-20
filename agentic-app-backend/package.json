@@ -15,7 +15,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.test.json",
     "rag:eval": "tsx --env-file=.env src/rag/eval/run.ts",
-"rag:ingest": "tsx --env-file=.env src/rag/ingest.ts src/data/rag_docs"
+"rag:ingest": "tsx --env-file=.env src/rag/ingest.ts src/data/rag_docs",
+"eval:agent": "tsx src/eval/run.ts"
   },
   "keywords": [],
   "author": "",
