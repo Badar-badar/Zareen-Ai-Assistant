@@ -1,0 +1,38 @@
+name: Agent eval (live model)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"
+  push:
+    paths:
+      - "agentic-app-backend/src/services/gimini.service.ts"
+      - "agentic-app-backend/src/agent/**"
+      - "agentic-app-backend/src/mcp/**"
+      - "agentic-app-backend/src/eval/**"
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: agentic-app-backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: agentic-app-backend/package-lock.json
+      - run: npm ci
+      - name: Run agent eval
+        run: npm run eval:agent
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          EVAL_MIN_PASS: "13"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-results
+          path: agentic-app-backend/eval-results/

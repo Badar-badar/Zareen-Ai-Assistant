@@ -2,7 +2,7 @@ import { GoogleGenAI, type Content } from "@google/genai";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { runAgentLoop, type AgentResult } from "../agent/agentLoop.js";
 
-const SYSTEM_PROMPT = `You are an AI assistant for Zareena's ERP and Store.
+export const SYSTEM_PROMPT = `You are an AI assistant for Zareena's ERP and Store.
 TOOLS AVAILABLE:
 - Customer tools: getCustomers, getCustomerById (use for customer info)
 - Order tools: getLatestOrders, getOrderWithCustomerDetails, getOrderById (use for customer orders, purchases, spending, and sales data)
