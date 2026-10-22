@@ -148,8 +148,8 @@ describe("Day 2: tool safety inside the loop", () => {
     const mcp = fakeMcp(["getLatestOrders"], () => "x".repeat(10_000));
     await runAgentLoop({ ...base, gemini, mcpClient: mcp.client });
     const out = generateContent.mock.calls[1][0].contents.at(-1).parts[0].functionResponse.response.output as string;
-    expect(out.length).toBeLessThan(100);
-    expect(out).toMatch(/truncated/);
+       expect(out.length).toBeLessThan(200); // truncated text plus the Day 8 wrapper
+    expect(out).toMatch(/trust="untrusted"/);
   });
 
   it("tells the model when a tool throws, and keeps going", async () => {
