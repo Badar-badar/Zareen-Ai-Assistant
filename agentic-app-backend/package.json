@@ -5,18 +5,16 @@
   "type": "module",
   "main": "index.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
     "dev": "npx tsx watch --env-file=.env index.ts",
     "start": "npx tsx --env-file=.env index.ts",
     "ingest": "npx tsx --env-file=.env src/rag/ingest.ts src/data/rag_docs",
-    "rag:ingest": "npx tsx --env-file=.env src/rag/ingest.ts src/data/rag_docs",
+    "rag:ingest": "tsx --env-file=.env src/rag/ingest.ts src/data/rag_docs",
     "rag:view": "npx tsx --env-file=.env -e \"import { ChromaClient } from 'chromadb'; const c = new ChromaClient({ host: 'localhost', port: 8000, ssl: false }); (async () => { const col = await c.getCollection({ name: 'rag_docs' }); console.log('Count:', await col.count()); console.log(await col.get({ limit: 5 })); })()\"",
-     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.test.json",
     "rag:eval": "tsx --env-file=.env src/rag/eval/run.ts",
-"rag:ingest": "tsx --env-file=.env src/rag/ingest.ts src/data/rag_docs",
-"eval:agent": "tsx src/eval/run.ts"
+    "eval:agent": "tsx src/eval/run.ts"
   },
   "keywords": [],
   "author": "",

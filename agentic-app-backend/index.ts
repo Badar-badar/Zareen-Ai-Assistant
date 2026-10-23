@@ -3,7 +3,9 @@ import { createApp } from "./src/app.js";
 import ChatSession from "./src/models/chatSession.model.js";
 import User from "./src/models/user.model.js";
 import PendingAction from "./src/models/pendingAction.model.js";
-
+import { initOtel } from "./src/obs/otel.js";
+import TraceModel from "./src/models/trace.model.js";
+initOtel();
 const app = createApp();
 
 const PORT = Number(process.env.PORT) || 4200;

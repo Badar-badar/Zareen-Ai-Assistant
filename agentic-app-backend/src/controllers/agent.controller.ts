@@ -3,6 +3,7 @@ import { GIMINI } from "../services/gimini.service.js";
 import { SESSION } from "../config/session.js";
 import { openSession } from "../mcp/session.js";
 import { toRole } from "../mcp/permissions.js";
+import { overDailyLimit } from "../obs/store.js";
 import {
     getSession, startSession, appendExchange, deleteSession, buildHistory,
 } from "../services/session.service.js";
@@ -13,6 +14,9 @@ export class AgentController {
         const { message, sessionId } = req.body as { message: string; sessionId?: string };
         const userId = req.user!.id; // from the verified token, never from the body
         const role = toRole(req.user!.role);
+        if (await overDailyLimit(userId)) {
+            return res.status(429).json({ error: "Daily usage limit reached. Try again tomorrow." });
+        }
 
         try {
             let history: ReturnType<typeof buildHistory> = [];
@@ -54,6 +58,9 @@ export class AgentController {
         const { message, sessionId } = req.body as { message: string; sessionId?: string };
         const userId = req.user!.id;
         const role = toRole(req.user!.role);
+       if (await overDailyLimit(userId)) {
+            return res.status(429).json({ error: "Daily usage limit reached. Try again tomorrow." });
+        }
 
         if (streaming.has(userId)) {
             return res.status(429).json({ error: "You already have a reply in progress." });
