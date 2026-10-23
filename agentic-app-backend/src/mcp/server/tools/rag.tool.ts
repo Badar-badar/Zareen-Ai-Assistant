@@ -3,30 +3,38 @@ import { z } from "zod";
 import { RagEngine } from "../../../rag/ragEngine.js";
 
 export function registerRagTools(mcpServer: McpServer) {
-  console.log("Registering RAG Tool");
-
   mcpServer.registerTool(
     "ragSearch",
     {
       title: "RAG Search",
-      description: "Search through the indexed documents using semantic similarity.",
-     inputSchema: z.object({
-      query: z.string().min(1).max(500).describe("Search query for semantic document retrieval"),
-      topK: z.number().int().min(1).max(10).optional().describe("Number of top relevant chunks to retrieve"),
-    }),
+      description:
+        "Search the store's knowledge base and product documentation: shipping, returns, refunds, payments, warranty, product specs. " +
+        "Returns numbered excerpts. Not for live order or customer data.",
+      inputSchema: z.object({
+        query: z.string().min(1).max(500).describe("What to look up"),
+        topK: z.number().int().min(1).max(10).optional().describe("Number of excerpts to retrieve"),
+      }),
     },
     async ({ query, topK }) => {
       try {
-        const result = await RagEngine.buildPrompt(query, topK);
+        const r = await RagEngine.retrieve(query, { topK: topK ?? 4 });
+        if (!r.confident || r.chunks.length === 0) {
+          return {
+            content: [{ type: "text", text: "No relevant documents found for this query." }],
+            structuredContent: { sources: [] },
+          };
+        }
         return {
-          content: [{ type: "text", text: result.prompt }],
-          structuredContent: { prompt: result.prompt, sources: result.sources },
+          content: [{ type: "text", text: RagEngine.format(r) }],
+          structuredContent: {
+            sources: r.chunks.map((c) => ({ n: c.n, source: c.source, section: c.section })),
+          },
         };
       } catch (error: any) {
-        console.log("RAG Tool Error", error);
+        console.error("RAG tool error", error?.message);
         return {
-          content: [{ type: "text", text: "RAG tool failed. Please try again." }],
-          structuredContent: { error: JSON.stringify(error) },
+          content: [{ type: "text", text: "Knowledge search failed. Tell the user it did not work; do not retry." }],
+          isError: true,
         };
       }
     }

@@ -8,7 +8,9 @@ import { detectInjection } from "../guard/detect.js";
 import { sanitizeReply } from "../guard/output.js";
 import { securityLog } from "../guard/log.js";
 import { StreamSanitizer } from "../guard/stream.js";
-
+import { Trace } from "../obs/trace.js";
+import { saveTrace } from "../obs/store.js";
+import { exportToOtel } from "../obs/otel.js";
 export type StopReason = "done" | "max_steps" | "timeout" | "budget" | "error" | "cancelled";
 
 export interface AgentResult {
@@ -51,6 +53,7 @@ export async function runAgentLoop(opts: RunOptions): Promise<AgentResult> {
 
   const runId = randomUUID().slice(0, 8);
   const startedAt = Date.now();
+    const tr = new Trace(userId ?? "anonymous");
   const deadline = startedAt + AGENT.totalTimeoutMs;
 
   const log = (event: string, data: Record<string, unknown> = {}) =>
@@ -69,6 +72,9 @@ export async function runAgentLoop(opts: RunOptions): Promise<AgentResult> {
       pendingActions: pendingActions.length,
       durationMs: Date.now() - startedAt,
     });
+    const rec = tr.finish({ stopReason, inputTokens, outputTokens, costUsd });
+    void saveTrace(rec);
+    exportToOtel(rec);
     return { reply, stopReason, steps, inputTokens, outputTokens, costUsd, pendingActions };
   };
 
@@ -91,7 +97,9 @@ export async function runAgentLoop(opts: RunOptions): Promise<AgentResult> {
     }
     try {
       const timeout = Math.max(1, Math.min(AGENT.toolTimeoutMs, deadline - Date.now()));
-      const result: any = await mcpClient.callTool({ name, arguments: args }, undefined, { timeout, signal });
+      const result: any = await tr.span(`tool:${name}`, { tool: name }, () =>
+        mcpClient.callTool({ name, arguments: args }, undefined, { timeout, signal })
+      );
 
       const pending = result.structuredContent?.pending;
       if (name.startsWith("propose") && !result.isError && pending?.id && !pendingActions.some((p) => p.id === pending.id)) {
@@ -116,7 +124,7 @@ export async function runAgentLoop(opts: RunOptions): Promise<AgentResult> {
   };
 
   // 2b. One model call. Streams when onDelta is given; otherwise one request, as before.
-  const callModel = async (contents: Content[]) => {
+  const callModelInner = async (contents: Content[]) => {
     const timeoutSignal = AbortSignal.timeout(Math.max(1, deadline - Date.now()));
     const config = {
       systemInstruction,
@@ -160,6 +168,13 @@ export async function runAgentLoop(opts: RunOptions): Promise<AgentResult> {
     return { text, calls, modelContent: { role: "model", parts } as Content, usage, sanitizer };
   };
 
+    let stepNo = 0;
+  const callModel = (contents: Content[]) =>
+    tr.span("model", { step: ++stepNo, model, streaming: Boolean(onDelta) }, async (set) => {
+      const out = await callModelInner(contents);
+      set({ inTok: out.usage?.promptTokenCount ?? 0, outTok: out.usage?.candidatesTokenCount ?? 0, toolCalls: out.calls.length });
+      return out;
+    });
   // 3. The loop
   const inputCheck = detectInjection(prompt);
   if (inputCheck.risk !== "none") {
