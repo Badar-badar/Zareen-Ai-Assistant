@@ -31,6 +31,7 @@ export const TOOL_PERMISSIONS: Record<string, Permission> = {
   ragSearch: "knowledge:read",
   proposeCreateOrder: "orders:propose",
   proposeCreateCustomer: "customers:propose",
+  proposeUpdateOrderStatus: "orders:propose",
 };
 
 export interface UserContext {
