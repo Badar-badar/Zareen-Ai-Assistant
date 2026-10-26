@@ -51,7 +51,7 @@ export class VectorStoreChroma {
     }
 
 
-        static async deleteByDoc(docId: string) {
+    static async deleteByDoc(docId: string) {
         await this.collection.delete({ where: { docId } });
     }
 

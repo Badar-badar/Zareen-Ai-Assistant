@@ -5,6 +5,9 @@ import User from "./src/models/user.model.js";
 import PendingAction from "./src/models/pendingAction.model.js";
 import { initOtel } from "./src/obs/otel.js";
 import TraceModel from "./src/models/trace.model.js";
+import WorkflowModel from "./src/models/workflow.model.js";
+import { startResumeLoop } from "./src/services/workflow.service.js";
+import "./src/workflows/auditOrders.js";
 initOtel();
 const app = createApp();
 
@@ -14,7 +17,7 @@ const HOST = process.env.HOST ?? "127.0.0.1";
 async function startServer() {
   try {
     await connectDB();
-    await Promise.all([ChatSession.init(), User.init(), PendingAction.init()]);
+    await Promise.all([ChatSession.init(), User.init(), PendingAction.init(),WorkflowModel.init()]);
     app.listen(PORT, HOST, () => {
       console.log(`Server is running on http://${HOST}:${PORT}`);
     });

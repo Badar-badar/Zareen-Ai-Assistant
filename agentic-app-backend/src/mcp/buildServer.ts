@@ -22,8 +22,7 @@ const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // Wraps the server so every registerTool call goes through the permission check.
 function guard(server: McpServer, ctx: UserContext): McpServer {
-  const wrapper = {
-    registerTool(name: string, config: any, handler: any) {
+  const wrapper = { registerTool(name: string, config: any, handler: any) {
       const needed = TOOL_PERMISSIONS[name];
       if (!needed || !can(ctx.role, needed)) return undefined; // hidden from the tool list
 

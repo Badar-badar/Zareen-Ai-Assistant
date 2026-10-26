@@ -9,7 +9,7 @@ import orderRouter from "./routes/order.route.js";
 import weatherRouter from "./routes/weather.route.js";
 import agentRouter from "./routes/agent.route.js";
 import actionRouter from "./routes/action.route.js";
-
+import workflowRouter from "./routes/workflow.route.js";
 export function createApp() {
   const app = express();
   app.disable("x-powered-by");
@@ -37,7 +37,7 @@ export function createApp() {
   app.use("/api/weather", weatherRouter);
   app.use("/api/chat", agentRouter);
   app.use("/api/actions", actionRouter);
-
+  app.use("/api/workflows", workflowRouter);
   app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     const status = err.status ?? 500;
     if (status >= 500) console.error(err);

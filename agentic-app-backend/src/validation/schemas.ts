@@ -55,3 +55,11 @@ export const ProposeCustomerInput = z
     phone: z.string().trim().max(30).optional(),
   })
   .strict();
+
+
+  export const StartWorkflowBody = z
+  .object({
+    type: z.enum(["auditPendingOrders"]),
+    params: z.object({ olderThanDays: z.number().int().min(0).max(365).optional() }).strict().optional(),
+  })
+  .strict();

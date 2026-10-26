@@ -1,0 +1,7 @@
+{
+  "name": "zareena-chat",
+  "private": true,
+  "scripts": {
+    "start": "npm --prefix client run dev"
+  }
+}

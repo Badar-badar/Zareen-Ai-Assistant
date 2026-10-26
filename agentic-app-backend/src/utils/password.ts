@@ -21,3 +21,5 @@ export async function verifyPassword(password: string, stored: string): Promise<
   const actual = await scryptAsync(password, Buffer.from(s, "base64"), expected.length);
   return timingSafeEqual(actual, expected);
 }
+
+// you@example.com "YourPasswordAtLeast12Chars"
