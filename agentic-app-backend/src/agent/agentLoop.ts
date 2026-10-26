@@ -44,12 +44,12 @@ interface RunOptions {
   onDelta?: (text: string) => void;
   onReset?: () => void; // the text streamed so far belonged to a tool step; clear it
   onReplace?: (text: string) => void; // final cleaned text differs from what was streamed
+  toolFilter?: (name: string) => boolean; // a specialist can see fewer tools than the server offers
 }
 
 type Usage = { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number };
-
 export async function runAgentLoop(opts: RunOptions): Promise<AgentResult> {
-  const { gemini, model, systemInstruction, prompt, mcpClient, userId, history = [], signal, onDelta, onReset, onReplace } = opts;
+  const { gemini, model, systemInstruction, prompt, mcpClient, userId, history = [], signal, onDelta, onReset, onReplace, toolFilter } = opts;
 
   const runId = randomUUID().slice(0, 8);
   const startedAt = Date.now();
@@ -82,7 +82,7 @@ export async function runAgentLoop(opts: RunOptions): Promise<AgentResult> {
 
   // 1. Tools the model may see (the per-request server already hides what this user may not use)
   const { tools } = await mcpClient.listTools();
-  const exposed = tools.filter((t) => ALLOWED_TOOLS.has(t.name));
+  const exposed = tools.filter((t) => ALLOWED_TOOLS.has(t.name) && (!toolFilter || toolFilter(t.name)));
   const functionDeclarations = exposed.map((t) => {
     const { $schema, ...schema } = t.inputSchema as Record<string, unknown>;
     return { name: t.name, description: t.description ?? t.title ?? "", parametersJsonSchema: schema };

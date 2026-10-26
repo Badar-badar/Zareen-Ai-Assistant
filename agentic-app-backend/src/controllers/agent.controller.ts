@@ -4,6 +4,7 @@ import { SESSION } from "../config/session.js";
 import { openSession } from "../mcp/session.js";
 import { toRole } from "../mcp/permissions.js";
 import { overDailyLimit } from "../obs/store.js";
+import { orchestrate } from "../agent/orchestrator.js";
 import {
     getSession, startSession, appendExchange, deleteSession, buildHistory,
 } from "../services/session.service.js";
@@ -25,14 +26,16 @@ export class AgentController {
                 if (!session) return res.status(404).json({ error: "Session not found" });
                 history = buildHistory(session.messages, SESSION.historyCharBudget);
             }
-
-            // One MCP server + client per request, built for THIS user, closed when done
-            const mcp = await openSession({ userId, role });
             let result;
-            try {
-                result = await GIMINI.generateResponseWithTools(message, mcp.client, { userId, history });
-            } finally {
-                await mcp.close();
+            if (process.env.AGENT_MODE === "team") {
+                result = await orchestrate({ message, userId, role, history });
+            } else {
+                const mcp = await openSession({ userId, role });
+                try {
+                    result = await GIMINI.generateResponseWithTools(message, mcp.client, { userId, history });
+                } finally {
+                    await mcp.close();
+                }
             }
 
             let activeSessionId = sessionId;

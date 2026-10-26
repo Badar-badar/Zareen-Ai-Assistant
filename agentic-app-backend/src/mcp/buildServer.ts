@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import CustomerModel from "../models/customer.model.js";
-import { proposeOrder, proposeCustomer } from "../services/pendingAction.service.js";
+import { proposeOrder, proposeCustomer, proposeOrderStatus } from "../services/pendingAction.service.js";
 import { registerCustomerTools } from "./server/tools/customer.tool.js";
 import { registerOrderTools } from "./server/tools/order.tool.js";
 import { registerWeatherTools } from "./server/tools/weather.tool.js";
@@ -101,6 +101,25 @@ export function buildServer(ctx: UserContext): McpServer {
       const r = await proposeCustomer(ctx.userId, args);
       if (!r.ok) return fail(r.error);
       return text("Saved as PENDING. Nothing is created yet. Tell the user it awaits their confirmation.", {
+        structuredContent: { pending: r.view },
+      });
+    }
+  );
+
+  g.registerTool(
+    "proposeUpdateOrderStatus",
+    {
+      title: "Propose Update Order Status",
+      description: "Propose changing an order's status. Does NOT update it until the user confirms. Get orderId from getOrderById first.",
+      inputSchema: z.object({
+        orderId: z.string(),
+        status: z.enum(["pending", "completed", "cancelled"]),
+      }),
+    },
+    async (args: unknown) => {
+      const r = await proposeOrderStatus(ctx.userId, args);
+      if (!r.ok) return fail(r.error);
+      return text("Saved as PENDING. Nothing is changed yet. Tell the user it awaits their confirmation.", {
         structuredContent: { pending: r.view },
       });
     }

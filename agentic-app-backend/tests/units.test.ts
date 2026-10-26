@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { hashPassword, verifyPassword } from "../src/utils/password.js";
 import { buildHistory, type StoredMessage } from "../src/services/session.service.js";
 import {
-  ChatBody, LimitQuery, ProposeOrderInput, ProposeCustomerInput, CreateOrderBody, LoginBody,
+  ChatBody, LimitQuery, ProposeOrderInput, ProposeOrderStatusInput, ProposeCustomerInput, CreateOrderBody, LoginBody,
 } from "../src/validation/schemas.js";
 
 const id = "a".repeat(24);
@@ -92,6 +92,13 @@ describe("Day 4: what the agent may propose (least privilege)", () => {
     for (const extra of [{ status: "completed" }, { orderNumber: "X" }, { orderDate: "2020-01-01" }]) {
       expect(ProposeOrderInput.safeParse({ customerId: id, totalAmount: 5, ...extra }).success).toBe(false);
     }
+  });
+
+  it("order status: requires an order id and a supported status", () => {
+    expect(ProposeOrderStatusInput.safeParse({ orderId: id, status: "cancelled" }).success).toBe(true);
+    expect(ProposeOrderStatusInput.safeParse({ orderId: "bad", status: "cancelled" }).success).toBe(false);
+    expect(ProposeOrderStatusInput.safeParse({ orderId: id, status: "shipped" }).success).toBe(false);
+    expect(ProposeOrderStatusInput.safeParse({ orderId: id, status: "completed", orderNumber: "ORD-1" }).success).toBe(false);
   });
 
   it("customer: lowercases email, rejects bad email and extras", () => {

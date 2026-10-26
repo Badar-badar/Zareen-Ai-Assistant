@@ -48,6 +48,13 @@ export const ProposeOrderInput = z
   })
   .strict();
 
+export const ProposeOrderStatusInput = z
+  .object({
+    orderId: z.string().regex(/^[a-f\d]{24}$/i),
+    status: z.enum(["pending", "completed", "cancelled"]),
+  })
+  .strict();
+
 export const ProposeCustomerInput = z
   .object({
     name: z.string().trim().min(1).max(100),

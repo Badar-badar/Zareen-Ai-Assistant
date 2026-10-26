@@ -4,7 +4,7 @@ import OrderModel from "../../src/models/order.model.js";
 import PendingAction from "../../src/models/pendingAction.model.js";
 import UserModel from "../../src/models/user.model.js";
 import {
-  proposeOrder, proposeCustomer, confirmAction, cancelAction,
+  proposeOrder, proposeCustomer, proposeOrderStatus, confirmAction, cancelAction,
 } from "../../src/services/pendingAction.service.js";
 import { PENDING } from "../../src/config/pending.js";
 import { hasDb, useTestDb, makeCustomer, makeUser } from "./dbHelper.js";
@@ -58,6 +58,37 @@ describe.skipIf(!hasDb)("Day 4: nothing is written until the user confirms (real
     expect((await confirmAction(alice, r.view.id)).ok).toBe(true);
     expect(await customers()).toBe(1);
     expect((await CustomerModel.findOne().lean<{ email: string }>())!.email).toBe("ali@example.com");
+  });
+
+  it("status changes are proposed first and applied only after confirmation", async () => {
+    const order = await OrderModel.create({
+      customerId: await makeCustomer(),
+      orderNumber: "ORD-STATUS-1",
+      totalAmount: 25,
+      status: "pending",
+    });
+    const proposal = await proposeOrderStatus(alice, { orderId: order.id, status: "completed" });
+    if (!proposal.ok) throw new Error(proposal.error);
+    expect(proposal.view.type).toBe("updateOrderStatus");
+    expect((await OrderModel.findById(order.id).lean())?.status).toBe("pending");
+
+    expect((await confirmAction(alice, proposal.view.id)).ok).toBe(true);
+    expect((await OrderModel.findById(order.id).lean())?.status).toBe("completed");
+  });
+
+  it("does not apply a status proposal if the order changed before confirmation", async () => {
+    const order = await OrderModel.create({
+      customerId: await makeCustomer(),
+      orderNumber: "ORD-STATUS-2",
+      totalAmount: 25,
+      status: "pending",
+    });
+    const proposal = await proposeOrderStatus(alice, { orderId: order.id, status: "completed" });
+    if (!proposal.ok) throw new Error(proposal.error);
+    await OrderModel.updateOne({ _id: order.id }, { $set: { status: "cancelled" } });
+
+    expect(await confirmAction(alice, proposal.view.id)).toMatchObject({ ok: false, status: 500 });
+    expect((await OrderModel.findById(order.id).lean())?.status).toBe("cancelled");
   });
 
   it("DONE-WHEN: confirming twice creates only one order", async () => {

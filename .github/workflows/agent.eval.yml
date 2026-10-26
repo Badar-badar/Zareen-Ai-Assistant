@@ -36,3 +36,9 @@ jobs:
         with:
           name: eval-results
           path: agentic-app-backend/eval-results/
+
+      - name: Run routing eval
+        run: npm run eval:routing
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          EVAL_DELAY_MS: "8000"
