@@ -1,4 +1,4 @@
-export type Role = "viewer" | "staff" | "admin";
+export type Role = "viewer" | "staff" | "admin" | "service";
 
 export type Permission =
   | "customers:read"
@@ -6,15 +6,18 @@ export type Permission =
   | "weather:read"
   | "knowledge:read"
   | "customers:propose"
-  | "orders:propose";
+  | "orders:propose"
+  | "orders:write"
+  | "admin:manage";
 
 const READ: Permission[] = ["customers:read", "orders:read", "weather:read", "knowledge:read"];
-const WRITE: Permission[] = ["customers:propose", "orders:propose"];
+const WRITE: Permission[] = ["customers:propose", "orders:propose", "orders:write"];
 
 const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   viewer: READ,
   staff: [...READ, ...WRITE],
-  admin: [...READ, ...WRITE],
+  admin: [...READ, ...WRITE, "admin:manage"],
+  service: READ, // the scheduled robot: read only, by design
 };
 
 export const can = (role: Role, p: Permission) => ROLE_PERMISSIONS[role]?.includes(p) ?? false;
@@ -39,6 +42,6 @@ export interface UserContext {
   role: Role;
 }
 
-// Unknown or legacy roles (like the old "user") become viewer: least privilege.
+// Unknown or legacy roles become viewer: least privilege.
 export const toRole = (r: unknown): Role =>
-  r === "admin" || r === "staff" || r === "viewer" ? r : "viewer";
+  r === "admin" || r === "staff" || r === "viewer" || r === "service" ? r : "viewer";
