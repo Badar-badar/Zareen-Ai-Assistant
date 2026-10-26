@@ -1,6 +1,6 @@
 export interface PendingAction {
   id: string;
-  type: 'createOrder' | 'createCustomer';
+  type: 'createOrder' | 'createCustomer' | 'updateOrderStatus';
   summary: string;
   expiresAt: string;
 }

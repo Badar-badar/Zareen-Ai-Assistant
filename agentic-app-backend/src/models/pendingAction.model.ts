@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 const PendingActionSchema = new mongoose.Schema(
   {
     userId: { type: String, required: true, index: true },
-    type: { type: String, enum: ["createOrder", "createCustomer"], required: true },
+    type: { type: String, enum: ["createOrder", "createCustomer", "updateOrderStatus"], required: true },
     payload: { type: mongoose.Schema.Types.Mixed, required: true }, // the exact data that will be written
     summary: { type: String, required: true },                      // card text, built by the server
     fingerprint: { type: String, required: true },                  // detects identical duplicate proposals
