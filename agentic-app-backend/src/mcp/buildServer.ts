@@ -8,7 +8,7 @@ import { registerOrderTools } from "./server/tools/order.tool.js";
 import { registerWeatherTools } from "./server/tools/weather.tool.js";
 import { registerRagTools } from "./server/tools/rag.tool.js";
 import { can, TOOL_PERMISSIONS, type UserContext } from "./permissions.js";
-
+import { runPython } from "../sandbox/runPython.js";
 const text = (t: string, extra: object = {}): CallToolResult => ({
   content: [{ type: "text", text: t }],
   ...extra,
@@ -125,5 +125,29 @@ export function buildServer(ctx: UserContext): McpServer {
     }
   );
 
+
+    // Only registered when the sandbox is switched on, and only visible to roles with code:run
+  if (process.env.SANDBOX_ENABLED === "true") {
+    g.registerTool(
+      "runPython",
+      {
+        title: "Run Python",
+        description:
+          "Run a short Python 3 program in an isolated sandbox and return its printed output. " +
+          "Use it for exact calculations, counting, sorting or data processing. " +
+          "The sandbox has NO internet, NO files and NO access to store data, so put any numbers you need directly in the code. " +
+          "Use print() to show results. Standard library only. Runs at most 10 seconds.",
+        inputSchema: z.object({ code: z.string().min(1).max(4000) }),
+      },
+      async ({ code }: { code: string }) => {
+        const r = await runPython(code);
+        console.log(JSON.stringify({ type: "sandbox", userId: ctx.userId, codeChars: code.length, ok: r.ok, exitCode: r.exitCode, timedOut: r.timedOut, ms: r.durationMs }));
+        if (r.error) return fail(`The sandbox could not run: ${r.error}`);
+        if (r.timedOut) return fail("The program ran too long and was stopped. Make it faster or simpler.");
+        const body = `exit code: ${r.exitCode}\nstdout:\n${r.stdout || "(empty)"}\nstderr:\n${r.stderr || "(empty)"}${r.truncated ? "\n[output truncated]" : ""}`;
+        return text(body);
+      }
+    );
+  }
   return server;
 }
