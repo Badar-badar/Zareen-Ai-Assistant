@@ -31,4 +31,5 @@ export const ALLOWED_TOOLS = new Set([
   "proposeCreateOrder",
   "proposeCreateCustomer",
   "proposeUpdateOrderStatus",
+    "runPython",
 ]);

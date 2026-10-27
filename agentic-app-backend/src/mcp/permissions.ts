@@ -8,15 +8,17 @@ export type Permission =
   | "customers:propose"
   | "orders:propose"
   | "orders:write"
-  | "admin:manage";
+  | "admin:manage"
+  | "code:run";
 
 const READ: Permission[] = ["customers:read", "orders:read", "weather:read", "knowledge:read"];
 const WRITE: Permission[] = ["customers:propose", "orders:propose", "orders:write"];
+const EXEC: Permission[] = ["code:run"];
 
 const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   viewer: READ,
-  staff: [...READ, ...WRITE],
-  admin: [...READ, ...WRITE, "admin:manage"],
+  staff: [...READ, ...WRITE,...EXEC],
+  admin: [...READ, ...WRITE,...EXEC, "admin:manage"],
   service: READ, // the scheduled robot: read only, by design
 };
 
@@ -35,6 +37,7 @@ export const TOOL_PERMISSIONS: Record<string, Permission> = {
   proposeCreateOrder: "orders:propose",
   proposeCreateCustomer: "customers:propose",
   proposeUpdateOrderStatus: "orders:propose",
+  runPython: "code:run",
 };
 
 export interface UserContext {
